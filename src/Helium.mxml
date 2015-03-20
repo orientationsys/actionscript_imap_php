@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   xmlns:mx="library://ns.adobe.com/flex/mx"					   
+					   creationComplete="init()"
+					   >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import com.robotblimp.helium.core.MessageManager;
+			import com.robotblimp.helium.dataModel.AttachmentVO;
+			import com.robotblimp.helium.dataModel.profileClasses.ExchangeProfileVO;
+			import com.robotblimp.helium.events.FormEvent;
+			import com.robotblimp.helium.services.db.System;
+			import com.robotblimp.helium.services.msg.ExchangeChecker;
+			import com.robotblimp.helium.services.msg.ExchangeStore;
+			import com.robotblimp.helium.services.msg.IMFMessage;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.DragEvent;
+			import mx.events.ListEvent;
+			
+			/**
+			 * Testing data
+			 */
+			public var myExchangeChecker:ExchangeChecker;
+			public var myExchangeStore:ExchangeStore;
+			public var msgManager:MessageManager;
+			
+			private var userID:String = "userID";
+			private var password:String = "pass";
+			private var deviceUID:String = "deviceUID";
+			
+			public var Sys:com.robotblimp.helium.services.db.System;
+			
+			public static const centralURL_Exchange:String = "http://localhost/flex/Exchange/bin-debug/php/exchg.php";
+			
+			public var US:UserSettings;
+			
+			[Bindable] public var messageList:ArrayCollection;
+			[Bindable] public var messageList2:ArrayCollection;
+			[Bindable] public var msgAttachments:ArrayCollection;
+			[Bindable] public var msgAttachments2:ArrayCollection;
+			private function init():void
+			{
+				/**
+				 * Rather than worry about connecting to all the different parts of the system
+				 *   we simply hardcode variables here
+				 */
+				
+				Sys = new com.robotblimp.helium.services.db.System();
+				
+				myExchangeChecker = new ExchangeChecker(userID,password,deviceUID);
+				myExchangeStore = new ExchangeStore(userID,password,deviceUID);
+				msgManager = new MessageManager(userID);
+				
+				messageList = new ArrayCollection(msgManager.getMessages('@Now'));
+				messageList2 = new ArrayCollection(msgManager.getMessages('@Someday'));
+				/**
+				 * Object already has default values...
+				 */
+				US = new UserSettings(userID);
+				US.profile = new ExchangeProfileVO();
+				US.profile.profileGUID = "00GUID";
+				US.profile.exchangeProfileGUID = "00GUID";
+				US.profile.protocol = "https";
+				US.profile.server = "webmail.ihostexchange.net";
+				US.profile.username = "rbi@chuckaduck.com";
+				US.profile.password = "test1234";			
+				US.profile.enabled = true;
+				
+			}
+			
+			/**
+			 * Convenience function to refresh our list
+			 */
+			public function refreshMessageList(type:String):void
+			{
+				if(type == "@Now")
+				{
+					messageList = new ArrayCollection(msgManager.getMessages(type));
+				}
+				else if(type == "@Someday")
+				{
+					messageList2 = new ArrayCollection(msgManager.getMessages(type));
+				}
+			}
+			
+			/**
+			 * In the full application, a timer fires periodically, calling checkIMAP().
+			 */			
+			public function checkExchange():void
+			{
+				myExchangeChecker.checkProfilesBoxes();
+			}
+			
+			protected function list1_clickHandler(event:MouseEvent):void
+			{
+				//show the attachments
+				if(event.currentTarget.id == 'listMessages'){
+					if(listMessages.selectedItem){
+						msgAttachments = new ArrayCollection(msgManager.getAttachments( (listMessages.selectedItem as IMFMessage).taskGUID ));
+					}					
+				}
+				else if(event.currentTarget.id == 'listMessages2'){
+					if(listMessages2.selectedItem){
+						msgAttachments2 = new ArrayCollection(msgManager.getAttachments( (listMessages2.selectedItem as IMFMessage).taskGUID ));
+					}					
+				}
+			}
+			
+			
+			protected function list2_clickHandler(event:MouseEvent):void
+			{
+				
+				if(event.currentTarget.id == 'listAttachments'){
+					if(listAttachments.selectedItem){
+						var att:AttachmentVO = listAttachments.selectedItem as AttachmentVO;
+						
+						// If the attachment hasn't been downloaded, download it
+						if(!att.haveData)
+						{
+							myExchangeChecker.addEventListener('ATTACHMENT_DOWNLOAD_COMPLETE',fulfillAwaitingDownload);
+							myExchangeChecker.getAttachment(att);
+						}
+							// If the attachment has been downloaded, launch it
+						else{
+							var attachFile:File = new File(att.storepath);
+							if(attachFile.exists && !attachFile.isDirectory){
+								attachFile.openWithDefaultApplication();
+							} 
+						}						
+					}					
+				}
+				else if(event.currentTarget.id == 'listAttachments2'){
+					if(listAttachments2.selectedItem){
+						var att2:AttachmentVO = listAttachments2.selectedItem as AttachmentVO;
+						
+						// If the attachment hasn't been downloaded, download it
+						if(!att2.haveData)
+						{
+							myExchangeChecker.addEventListener('ATTACHMENT_DOWNLOAD_COMPLETE',fulfillAwaitingDownload);
+							myExchangeChecker.getAttachment(att2);
+						}
+							// If the attachment has been downloaded, launch it
+						else{
+							var attachFile2:File = new File(att2.storepath);
+							if(attachFile2.exists && !attachFile2.isDirectory){
+								attachFile2.openWithDefaultApplication();
+							} 
+						}						
+					}					
+				}
+			}
+			
+			private function fulfillAwaitingDownload(event:FormEvent):void
+			{
+				if(event.data.path && !event.data.err)
+				{
+					
+					var attachFile:File = new File(event.data.path);
+					if(attachFile.exists && !attachFile.isDirectory){
+						attachFile.openWithDefaultApplication();
+					} 
+					
+				}
+				
+			}
+			
+			
+			protected function listMessages_dragDropHandler(event:DragEvent):void
+			{
+				if((event.dragInitiator as List).selectedItems[0].lastMailboxName != '@Now')
+				{
+					myExchangeStore.moveTaskMessageToBox((event.dragInitiator as List).selectedItems, '@Now');
+					clearAttachments();
+				}
+			}
+			
+			
+			protected function listMessages2_dragDropHandler(event:DragEvent):void
+			{
+				if((event.dragInitiator as List).selectedItems[0].lastMailboxName != '@Someday')
+				{
+					myExchangeStore.moveTaskMessageToBox((event.dragInitiator as List).selectedItems, '@Someday');
+					clearAttachments();
+				}
+			}
+			
+			private function clearAttachments():void
+			{
+				msgAttachments = new ArrayCollection();
+				msgAttachments2 = new ArrayCollection();				
+			}
+			
+			public function addNetActivityIndication(str:String):void
+			{
+			
+			}
+			
+			public function removeNetActivityIndication():void
+			{
+			
+			}
+			
+			public function showNotification(notification:String):void
+			{
+			
+			}
+		]]>
+	</fx:Script>
+	
+	<s:layout>
+		<s:VerticalLayout />
+	</s:layout>
+	<s:HGroup verticalAlign="middle">
+		<s:Button label="Check EXCHANGE" click="checkExchange()" />
+	</s:HGroup>
+
+	<s:HGroup verticalAlign="middle">
+		<s:Label text="@Now" fontWeight="bold"/>
+	</s:HGroup>
+	
+	<s:HGroup width="100%">
+		<s:VGroup width="50%">
+			<s:Label text="Messages" />
+			<s:List id="listMessages" dataProvider="{messageList}" labelField="subject" requireSelection="true"
+					height="100%" width="100%" dragEnabled="true" dragMoveEnabled="true" dropEnabled="true" allowMultipleSelection="true"
+					click="list1_clickHandler(event)"  dragDrop="listMessages_dragDropHandler(event)"/>
+		</s:VGroup>
+		
+		<s:VGroup width="50%">				
+			<s:Label text="Attachments" />
+			<s:List id="listAttachments" dataProvider="{msgAttachments}" labelField="title" 
+					height="100%" width="100%" 
+					click="list2_clickHandler(event)"/>
+		</s:VGroup>
+		
+		
+	</s:HGroup>
+	
+	<s:HGroup verticalAlign="middle">
+		<s:Label text="@Someday" fontWeight="bold"/>
+	</s:HGroup>
+	
+	<s:HGroup width="100%">
+		<s:VGroup width="50%">
+			<s:Label text="Messages" />
+			<s:List id="listMessages2" dataProvider="{messageList2}" labelField="subject" requireSelection="true"
+					height="100%" width="100%" dragEnabled="true" dragMoveEnabled="true" dropEnabled="true" allowMultipleSelection="true"
+					click="list1_clickHandler(event)"  dragDrop="listMessages2_dragDropHandler(event)"/>
+		</s:VGroup>
+		
+		<s:VGroup width="50%">				
+			<s:Label text="Attachments" />
+			<s:List id="listAttachments2" dataProvider="{msgAttachments2}" labelField="title" 
+					height="100%" width="100%" 
+					click="list2_clickHandler(event)"/>
+		</s:VGroup>
+		
+		
+	</s:HGroup>
+</s:WindowedApplication>

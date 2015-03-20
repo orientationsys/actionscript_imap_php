@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="400" height="300">
+	<fx:Script>
+		<![CDATA[
+			import com.robotblimp.helium.core.UserSettings;
+			import com.robotblimp.helium.services.msg.ExchangeStore;
+			
+			public var userGUID:String;
+			private function doMove():void
+			{	
+				var EXS:ExchangeStore = new ExchangeStore(userGUID);
+				
+				EXS.moveTaskMessageToBox('2', 1);
+			}
+		]]>
+	</fx:Script>
+	
+	<mx:Button label="Move" click="doMove()"/>
+</mx:VBox>
